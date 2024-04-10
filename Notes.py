@@ -92,7 +92,7 @@ def track_min_data():
     close = prices[-1] 
     high = max(prices) 
     low = min(prices)
-    return open, high, low, close
+    return open, close, high, low
 
 def backtest(df, initial_balance):
     wait_time = 60  # Wait time in seconds (1 minute)
@@ -103,8 +103,8 @@ def backtest(df, initial_balance):
     portfolio_values = []
     buy_price = []
     trade_active = False  # Track if a trade is active
-    coinbase_API_key = None
-    coinbase_API_secret = None
+    coinbase_API_key = "8sjh4qcRNVFKGEhX"
+    coinbase_API_secret = "iVacysje8THlgeYMkGyr8LJ8zG7jWEOz"
     client = Client(coinbase_API_key, coinbase_API_secret)
     sells = 0
     buys = 0
@@ -135,7 +135,7 @@ def backtest(df, initial_balance):
         desired_difference = pd.Timedelta(minutes=1)
         latency = (desired_difference - time_difference).total_seconds()
         adj_time = prev_time + desired_difference
-        new_data = pd.DataFrame({'timestamp': [adj_time], 'open': [close], 'high': [close], 'low': [close], 'close': [close]})
+        new_data = pd.DataFrame({'timestamp': [adj_time], 'open': [open],'close': [close] ,'high': [high], 'low': [low]})
         count += 1 
         # Append the new data to the live table
         live_table = pd.concat([live_table, new_data], ignore_index=True)
