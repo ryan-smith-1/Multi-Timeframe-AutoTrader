@@ -103,8 +103,8 @@ def backtest(df, initial_balance):
     portfolio_values = []
     buy_price = []
     trade_active = False  # Track if a trade is active
-    coinbase_API_key = "8sjh4qcRNVFKGEhX"
-    coinbase_API_secret = "iVacysje8THlgeYMkGyr8LJ8zG7jWEOz"
+    coinbase_API_key = None
+    coinbase_API_secret = None
     client = Client(coinbase_API_key, coinbase_API_secret)
     sells = 0
     buys = 0
