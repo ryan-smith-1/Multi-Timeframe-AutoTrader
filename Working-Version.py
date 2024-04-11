@@ -47,33 +47,31 @@ def atr(data, period):
     return atr
 
 ######SUPERTREND_VARIABLES######
-period = 12
+s_period = 12
 multiplier = 3
 ######SUPERTREND_VARIABLES######
 
 def supertrend(data, period, multiplier):
-    #bars = exchange.fetch_ohlcv('BTC/USDT', timeframe='1m', limit = 15)
-    #df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     data = data.copy()
-    data['atr'] = atr(data, period)  # Calculate ATR using the live table data
+    data['atr'] = atr(data, period)
     data['upper_band'] = ((data['high'] + data['low'])/2) + (multiplier * data['atr'].iloc[-1])
     data['lower_band'] = ((data['high'] + data['low'])/2) - (multiplier * data['atr'].iloc[-1])
     data['in_uptrend'] = True
 
     for current in range(1, len(data)):
         prev = current - 1
-        if data['close'][current] > data['upper_band'][prev]:
-            data.loc[current, 'in_uptrend'] = True
-        elif data['close'][current] < data['lower_band'][prev]:
-            data.loc[current, 'in_uptrend'] = False
+        if data['close'].iloc[current] > data['upper_band'].iloc[prev]:
+            data.iloc[current, data.columns.get_loc('in_uptrend')] = True
+        elif data['close'].iloc[current] < data['lower_band'].iloc[prev]:
+            data.iloc[current, data.columns.get_loc('in_uptrend')] = False
         else:
-            data.loc[current, 'in_uptrend'] = data['in_uptrend'][prev]
+            data.iloc[current, data.columns.get_loc('in_uptrend')] = data['in_uptrend'].iloc[prev]
 
-            if data['in_uptrend'][current] and data['lower_band'][current] < data['lower_band'][prev]:
-                data.loc[current, 'lower_band'] = data['lower_band'][prev]
+            if data['in_uptrend'].iloc[current] and data['lower_band'].iloc[current] < data['lower_band'].iloc[prev]:
+                data.iloc[current, data.columns.get_loc('lower_band')] = data['lower_band'].iloc[prev]
 
-            if not data['in_uptrend'][current] and data['upper_band'][current] > data['upper_band'][prev]:
-                data.loc[current, 'upper_band'] = data['upper_band'][prev]
+            if not data['in_uptrend'].iloc[current] and data['upper_band'].iloc[current] > data['upper_band'].iloc[prev]:
+                data.iloc[current, data.columns.get_loc('upper_band')] = data['upper_band'].iloc[prev]
 
     return data
 
@@ -212,7 +210,7 @@ def backtest(df, initial_balance):
 
         
         # Calculate supertrend indicator for the current 15-minute window
-        current_supertrend = supertrend(live_table, period, multiplier)
+        current_supertrend = supertrend(live_table, s_period, multiplier)
         current_in_uptrend = current_supertrend['in_uptrend'].iloc[-1]
 
         #STOP LOSS CONDITION
