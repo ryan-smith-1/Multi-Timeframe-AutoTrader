@@ -4,9 +4,14 @@ Period of 12 and multiplier of 3 for the supertrend settings.
 
 Working Version: working-version.py is the most up to date version of the bot. Supertrend on 15 minutes timeframe, and supertrend calculation bugs fixed.
 
-Improvements to be made - 
-Adding some sort of RSI index to the buy and sell conditions. 
 
 Before Running/Installation - 
 Set Coinbase REST API keys (The non pro/advanced one), in all three spots. 
 pip install all required libraries. 
+
+
+
+IMPROVEMENTS TO BE MADE - 
+  1. Create a way to properly backtest the exact strategy being used. Need historical data by the hour for the DEMA, and need historical data by the minute for supertrend. Stoploss ordrs in backtesting?  
+ 
+  3. Adding some sort of RSI index to the buy and sell conditions. 
