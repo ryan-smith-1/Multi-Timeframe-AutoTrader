@@ -1,3 +1,4 @@
+from functools import reduce
 import ccxt
 import pandas as pd
 import numpy as np
@@ -5,6 +6,13 @@ from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 import time
 from coinbase.wallet.client import Client
+import yfinance as yf
+import talib
+import requests
+import pandas as pd
+import talib
+
+
 
 pd.set_option('display.max_rows', None)
 
@@ -44,8 +52,8 @@ multiplier = 3
 ######SUPERTREND_VARIABLES######
 
 def supertrend(data, period, multiplier):
-    bars = exchange.fetch_ohlcv('BTC/USDT', timeframe='1m', limit = 15)
-    df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    #bars = exchange.fetch_ohlcv('BTC/USDT', timeframe='1m', limit = 15)
+    #df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     data = data.copy()
     data['atr'] = atr(data, period)  # Calculate ATR using the live table data
     data['upper_band'] = ((data['high'] + data['low'])/2) + (multiplier * data['atr'].iloc[-1])
@@ -69,10 +77,52 @@ def supertrend(data, period, multiplier):
 
     return data
 
-def dema(data, period, column='close'):
-    ema = data[column].ewm(span=period, adjust=False).mean()
-    dema = 2 * ema - ema.ewm(span=period, adjust=False).mean()
-    return dema
+
+
+
+
+
+def calculate_current_dema():
+    # Initialize variables
+    base_url = "https://min-api.cryptocompare.com/data/v2/histohour"
+    fsym = "BTC"
+    tsym = "USD"
+    limit = 2000
+    total_hours = 200 * 24  # 200 days * 24 hours per day
+    closing_prices = []
+
+    # Fetch historical hourly data iteratively
+    while total_hours > 0:
+        # Calculate the number of hours to fetch in this iteration
+        hours_to_fetch = min(total_hours, limit)
+
+        # Make the API request
+        params = {
+            'fsym': fsym,
+            'tsym': tsym,
+            'limit': hours_to_fetch
+        }
+        response = requests.get(base_url, params=params)
+        data = response.json()['Data']['Data']
+
+        # Extract closing prices from the response
+        closing_prices += [entry['close'] for entry in data]
+
+        # Update total hours remaining
+        total_hours -= hours_to_fetch
+
+    return closing_prices
+
+def calculate_dema(closing_prices):
+    # Convert closing prices to DataFrame
+    df = pd.DataFrame(closing_prices, columns=['Close'])
+
+    # Calculate DEMA
+    dema = talib.DEMA(df['Close'], timeperiod=200)
+
+    return dema.iloc[-1]
+
+
 
 def track_min_data(): 
     coinbase_API_key = None
@@ -112,7 +162,7 @@ def backtest(df, initial_balance):
     currency_code = "BTC-USD"
     live_table = pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close'])
 
-    df['DEMA'] = dema(df, period=200)
+
     dema_last_update = df['timestamp'].iloc[-1]
     current_timestamp = pd.Timestamp.now()
 
@@ -128,18 +178,18 @@ def backtest(df, initial_balance):
 
         open, close, high, low = track_min_data()
 
-
         prev_time = new_data['timestamp'].iloc[-1] 
         curr_time = pd.Timestamp.now()
-        time_difference = curr_time - prev_time
         desired_difference = pd.Timedelta(minutes=1)
-        latency = (desired_difference - time_difference).total_seconds()
         adj_time = prev_time + desired_difference
         new_data = pd.DataFrame({'timestamp': [adj_time], 'open': [open],'close': [close] ,'high': [high], 'low': [low]})
         count += 1 
         # Append the new data to the live table
         live_table = pd.concat([live_table, new_data], ignore_index=True)
         print(live_table)
+        close_prices = calculate_current_dema() 
+
+        print(calculate_dema(close_prices))
         # Wait for the next iteration
         #current_timestamp += pd.Timedelta(seconds=wait_time)
         
@@ -160,15 +210,7 @@ def backtest(df, initial_balance):
         # Keep only the last 15 minutes of data in the live table
         live_table = live_table[live_table['timestamp'] >= current_timestamp - pd.Timedelta(minutes=15)]
 
-        # Update the DEMA every 24 hours
-        if current_timestamp - dema_last_update >= pd.Timedelta(hours=24):
-            dema_last_update = current_timestamp
-            daily_data = exchange.fetch_ohlcv('BTC/USDT', timeframe='1d', limit=200)
-            daily_df = pd.DataFrame(daily_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-            daily_df['timestamp'] = pd.to_datetime(daily_df['timestamp'], unit='ms')
-            df = pd.concat([df, daily_df.iloc[-1:]], ignore_index=True)
-            df['DEMA'] = dema(df, period=200)
-
+        
         # Calculate supertrend indicator for the current 15-minute window
         current_supertrend = supertrend(live_table, period, multiplier)
         current_in_uptrend = current_supertrend['in_uptrend'].iloc[-1]
@@ -185,8 +227,12 @@ def backtest(df, initial_balance):
                 sells += 1 
             pass
 
+        if trade_active == False: 
+            close_prices = calculate_current_dema() 
+            current_dema = float(calculate_dema(close_prices))
+            pass
         # Trading logic (unchanged)
-        if current_in_uptrend and new_price > df['DEMA'].iloc[-1] and balance > 0:
+        if current_in_uptrend and new_price > current_dema and balance > 0:
             # Buy entire usd balance worth of btc at market
             # Set stop loss condition for current price
             buy_amount = balance
@@ -211,7 +257,7 @@ def backtest(df, initial_balance):
         # Calculate the current portfolio value
         portfolio_value = balance + (btc_holdings * new_price)
         portfolio_values.append(portfolio_value)
-        print(current_in_uptrend, "New Price: ", new_price, "DEMA: ", df['DEMA'].iloc[-1], "USD BALANCE: ", balance, "BTC BALANCE: ", btc_holdings * new_price)
+        print(current_in_uptrend, "New Price: ", new_price, "DEMA: ", float(calculate_current_dema()), "USD BALANCE: ", balance, "BTC BALANCE: ", btc_holdings * new_price)
         print("Buys: ", buys, "Sells: ", sells)
 
         # Wait for the next iteration
@@ -220,7 +266,7 @@ def backtest(df, initial_balance):
     return trades, portfolio_values
 
 # Perform backtesting
-initial_balance = 5075  # Starting balance in USD
+initial_balance = 5000  # Starting balance in USD
 trades, portfolio_values = backtest(df, initial_balance)
 
 # Print the trades
