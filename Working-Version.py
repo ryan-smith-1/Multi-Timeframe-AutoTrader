@@ -257,7 +257,7 @@ def backtest(df, initial_balance):
         # Calculate the current portfolio value
         portfolio_value = balance + (btc_holdings * new_price)
         portfolio_values.append(portfolio_value)
-        print(current_in_uptrend, "New Price: ", new_price, "DEMA: ", float(calculate_current_dema()), "USD BALANCE: ", balance, "BTC BALANCE: ", btc_holdings * new_price)
+        print(current_in_uptrend, "New Price: ", new_price, "DEMA: ", current_dema, "USD BALANCE: ", balance, "BTC BALANCE: ", btc_holdings * new_price)
         print("Buys: ", buys, "Sells: ", sells)
 
         # Wait for the next iteration
