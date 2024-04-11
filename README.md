@@ -1,8 +1,7 @@
 DEMA + SUPERTREND Strategy BTC bot. Built for coinbase but could work with more. 
-Right now there is a version operating with the supertrend at 1 minute time frame (updating every 1 min) and DEMA at 200 days timeframe, and a copy version that is running supertrend at 15 minute time frame. 
-Period of 12 and multiplier of 3 for the supertrend settings. 
+Current supertrend settings are period of 12 and multiplier of 3
 
-Working Version: working-version.py is the most up to date version of the bot. Supertrend on 15 minutes timeframe, and supertrend calculation bugs fixed.
+Working Version: working-version.py is the most up to date version of the bot, but could include logic bugs in trading strategy/calculations
 
 
 Before Running/Installation - 
