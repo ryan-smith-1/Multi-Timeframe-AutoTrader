@@ -11,6 +11,6 @@ pip install all required libraries.
 
 
 IMPROVEMENTS TO BE MADE - 
-  1. Create a way to properly backtest the exact strategy being used. Need historical data by the hour for the DEMA, and need historical data by the minute for supertrend. Stoploss ordrs in backtesting?  
+  1. Create a way to properly backtest the exact strategy being used
  
   3. Adding some sort of RSI index to the buy and sell conditions. 
