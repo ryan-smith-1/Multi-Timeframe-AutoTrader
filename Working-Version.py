@@ -8,9 +8,6 @@ import time
 from coinbase.wallet.client import Client
 import yfinance as yf
 import talib
-import requests
-import pandas as pd
-import talib
 
 
 
@@ -47,31 +44,34 @@ def atr(data, period):
     return atr
 
 ######SUPERTREND_VARIABLES######
-s_period = 12
+period = 12
 multiplier = 3
 ######SUPERTREND_VARIABLES######
 
 def supertrend(data, period, multiplier):
+    #bars = exchange.fetch_ohlcv('BTC/USDT', timeframe='1m', limit = 15)
+    #df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     data = data.copy()
-    data['atr'] = atr(data, period)
+    print(data)
+    data['atr'] = atr(data, period)  # Calculate ATR using the live table data
     data['upper_band'] = ((data['high'] + data['low'])/2) + (multiplier * data['atr'].iloc[-1])
     data['lower_band'] = ((data['high'] + data['low'])/2) - (multiplier * data['atr'].iloc[-1])
     data['in_uptrend'] = True
 
     for current in range(1, len(data)):
         prev = current - 1
-        if data['close'].iloc[current] > data['upper_band'].iloc[prev]:
-            data.iloc[current, data.columns.get_loc('in_uptrend')] = True
-        elif data['close'].iloc[current] < data['lower_band'].iloc[prev]:
-            data.iloc[current, data.columns.get_loc('in_uptrend')] = False
+        if data['close'][current] > data['upper_band'][prev]:
+            data.loc[current, 'in_uptrend'] = True
+        elif data['close'][current] < data['lower_band'][prev]:
+            data.loc[current, 'in_uptrend'] = False
         else:
-            data.iloc[current, data.columns.get_loc('in_uptrend')] = data['in_uptrend'].iloc[prev]
+            data.loc[current, 'in_uptrend'] = data['in_uptrend'][prev]
 
-            if data['in_uptrend'].iloc[current] and data['lower_band'].iloc[current] < data['lower_band'].iloc[prev]:
-                data.iloc[current, data.columns.get_loc('lower_band')] = data['lower_band'].iloc[prev]
+            if data['in_uptrend'][current] and data['lower_band'][current] < data['lower_band'][prev]:
+                data.loc[current, 'lower_band'] = data['lower_band'][prev]
 
-            if not data['in_uptrend'].iloc[current] and data['upper_band'].iloc[current] > data['upper_band'].iloc[prev]:
-                data.iloc[current, data.columns.get_loc('upper_band')] = data['upper_band'].iloc[prev]
+            if not data['in_uptrend'][current] and data['upper_band'][current] > data['upper_band'][prev]:
+                data.loc[current, 'upper_band'] = data['upper_band'][prev]
 
     return data
 
@@ -79,6 +79,10 @@ def supertrend(data, period, multiplier):
 
 
 
+
+import requests
+import pandas as pd
+import talib
 
 def calculate_current_dema():
     # Initialize variables
@@ -105,7 +109,7 @@ def calculate_current_dema():
 
         # Extract closing prices from the response
         closing_prices += [entry['close'] for entry in data]
-
+        
         # Update total hours remaining
         total_hours -= hours_to_fetch
 
@@ -142,6 +146,48 @@ def track_min_data():
     low = min(prices)
     return open, close, high, low
 
+def fetch_btc_data():
+    # Initialize variables
+    base_url = "https://min-api.cryptocompare.com/data/v2/histominute"
+    fsym = "BTC"
+    tsym = "USD"
+    limit = 15  # 15 minutes data
+    ohlcv_data = []
+
+    params = {
+        'fsym': fsym,
+        'tsym': tsym,
+        'limit': limit
+    }
+    
+    response = requests.get(base_url, params=params)
+    data = response.json()['Data']['Data']
+    count = 0
+    # Extract OHLCV data from the response
+    for entry in data:
+        timestamp = entry['time']
+        timestamp_formatted = datetime.fromtimestamp(timestamp)
+        open_price = entry['open']
+        high_price = entry['high']
+        low_price = entry['low']
+        close_price = entry['close']
+        volume = entry['volumeto']
+        ohlcv_data.append({
+            'timestamp': timestamp_formatted,
+            'open': open_price,
+            'high': high_price,
+            'low': low_price,
+            'close': close_price,
+            'volume': volume
+        })
+
+    # Convert OHLCV data to DataFrame
+    df = pd.DataFrame(ohlcv_data)
+    
+    return df
+
+
+
 def backtest(df, initial_balance):
     wait_time = 900  # Wait time in seconds (1 minute)
     balance = initial_balance
@@ -156,63 +202,25 @@ def backtest(df, initial_balance):
     client = Client(coinbase_API_key, coinbase_API_secret)
     sells = 0
     buys = 0
-
     currency_code = "BTC-USD"
     live_table = pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close'])
-
-
-    dema_last_update = df['timestamp'].iloc[-1]
     current_timestamp = pd.Timestamp.now()
-
     # Collect 15 minutes of supertrend data
-    print("Collecting 15 minutes of supertrend data...")
-    
-    new_data = pd.DataFrame({'timestamp': [pd.Timestamp.now()], 'open': [0], 'high': [0], 'low': [0], 'close': [0]})
 
-    for _ in range(15):
-        count = 0
-        
-        # Fetch new BTC price data
 
-        open, close, high, low = track_min_data()
-
-        prev_time = new_data['timestamp'].iloc[-1] 
-        curr_time = pd.Timestamp.now()
-        desired_difference = pd.Timedelta(minutes=1)
-        adj_time = prev_time + desired_difference
-        new_data = pd.DataFrame({'timestamp': [adj_time], 'open': [open],'close': [close] ,'high': [high], 'low': [low]})
-        count += 1 
-        # Append the new data to the live table
-        live_table = pd.concat([live_table, new_data], ignore_index=True)
-        print(live_table)
-        close_prices = calculate_current_dema() 
-
-        print(calculate_dema(close_prices))
-        # Wait for the next iteration
-        #current_timestamp += pd.Timedelta(seconds=wait_time)
-        
-    print("Supertrend data collection completed. Starting trading strategy...")
 
     while True:
         # Fetch new BTC price data
         current_price = client.get_spot_price(currency=currency_code)
         new_price = float(current_price.amount)
         current_timestamp += pd.Timedelta(seconds=wait_time)    
-        
-        # Create a temporary DataFrame with the current price data and timestamp
-        new_data = pd.DataFrame({'timestamp': [current_timestamp], 'open': [new_price], 'high': [new_price], 'low': [new_price], 'close': [new_price]})
-
-        # Append the new data to the live table
-        live_table = pd.concat([live_table, new_data], ignore_index=True)
-
-        # Keep only the last 15 minutes of data in the live table
-        live_table = live_table[live_table['timestamp'] >= current_timestamp - pd.Timedelta(minutes=15)]
-
-        
+        live_table = fetch_btc_data()     
         # Calculate supertrend indicator for the current 15-minute window
-        current_supertrend = supertrend(live_table, s_period, multiplier)
+        current_supertrend = supertrend(live_table, period, multiplier)
         current_in_uptrend = current_supertrend['in_uptrend'].iloc[-1]
-
+        print("Collecting 15 minutes of supertrend data...")
+   
+        print("Supertrend data collection completed. Starting trading strategy...")
         #STOP LOSS CONDITION
         if trade_active == True and buy_price[0]:
             if new_price <= buy_price[0]: 
@@ -224,6 +232,10 @@ def backtest(df, initial_balance):
                 trade_active = False
                 sells += 1 
             pass
+        #CASHOUT CONDITION
+        if trade_active == True: 
+            pass
+
 
         if trade_active == False: 
             close_prices = calculate_current_dema() 
