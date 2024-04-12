@@ -57,7 +57,6 @@ def supertrend(data, period, multiplier):
     data['upper_band'] = ((data['high'] + data['low'])/2) + (multiplier * data['atr'].iloc[-1])
     data['lower_band'] = ((data['high'] + data['low'])/2) - (multiplier * data['atr'].iloc[-1])
     data['in_uptrend'] = True
-
     for current in range(1, len(data)):
         prev = current - 1
         if data['close'][current] > data['upper_band'][prev]:
@@ -162,7 +161,6 @@ def fetch_btc_data():
     
     response = requests.get(base_url, params=params)
     data = response.json()['Data']['Data']
-    count = 0
     # Extract OHLCV data from the response
     for entry in data:
         timestamp = entry['time']
@@ -190,6 +188,7 @@ def fetch_btc_data():
 
 def backtest(df, initial_balance):
     wait_time = 900  # Wait time in seconds (1 minute)
+    count = 0
     balance = initial_balance
     btc_holdings = 0
     buy_info = []
@@ -205,6 +204,7 @@ def backtest(df, initial_balance):
     currency_code = "BTC-USD"
     live_table = pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close'])
     current_timestamp = pd.Timestamp.now()
+
     # Collect 15 minutes of supertrend data
 
 
@@ -214,13 +214,47 @@ def backtest(df, initial_balance):
         current_price = client.get_spot_price(currency=currency_code)
         new_price = float(current_price.amount)
         current_timestamp += pd.Timedelta(seconds=wait_time)    
+
+
+        count += 1 
+
+        print("Collecting 15 minutes of supertrend data...")
         live_table = fetch_btc_data()     
         # Calculate supertrend indicator for the current 15-minute window
         current_supertrend = supertrend(live_table, period, multiplier)
         current_in_uptrend = current_supertrend['in_uptrend'].iloc[-1]
-        print("Collecting 15 minutes of supertrend data...")
-   
+
         print("Supertrend data collection completed. Starting trading strategy...")
+
+
+
+        
+
+
+        close_prices = calculate_current_dema() 
+        current_dema = float(calculate_dema(close_prices))
+        # Trading logic (unchanged)
+        if current_in_uptrend and new_price > current_dema and balance > 0:
+        # Buy entire usd balance worth of btc at market
+        # Set stop loss condition for current price
+            buy_amount = balance
+            btc_bought = buy_amount / new_price
+            btc_holdings += btc_bought
+            balance -= buy_amount
+            buy_info.append(btc_bought)
+            buy_price.append(new_price)
+            trade_active = True
+            print("BOUGHT")
+            buys += 1
+        elif not current_in_uptrend and trade_active:
+        # Sell entire btc balance at market
+            last_buy = buy_info.pop()
+            balance += last_buy * new_price
+            btc_holdings -= last_buy
+            buy_p = buy_price.pop()
+            print("Profit/Loss from selling", last_buy, "BTC: ", (last_buy * new_price) - (last_buy * buy_p))
+            trade_active = False
+            sells += 1
         #STOP LOSS CONDITION
         if trade_active == True and buy_price[0]:
             if new_price <= buy_price[0]: 
@@ -232,43 +266,33 @@ def backtest(df, initial_balance):
                 trade_active = False
                 sells += 1 
             pass
-        #CASHOUT CONDITION
+
+
+        #TAKE PROFIT CONDITION
+        profit_margin = 30
         if trade_active == True: 
-            pass
-
-
-        if trade_active == False: 
-            close_prices = calculate_current_dema() 
-            current_dema = float(calculate_dema(close_prices))
-            pass
-        # Trading logic (unchanged)
-        if current_in_uptrend and new_price > current_dema and balance > 0:
-            # Buy entire usd balance worth of btc at market
-            # Set stop loss condition for current price
-            buy_amount = balance
-            btc_bought = buy_amount / new_price
-            btc_holdings += btc_bought
-            balance -= buy_amount
-            buy_info.append(btc_bought)
-            buy_price.append(new_price)
-            trade_active = True
-            print("BOUGHT")
-            buys += 1
-        elif not current_in_uptrend and trade_active:
-            # Sell entire btc balance at market
-            last_buy = buy_info.pop()
-            balance += last_buy * new_price
-            btc_holdings -= last_buy
+            last_buy = buy_info.pop()  #IN BTC
             buy_p = buy_price.pop()
-            print("Profit/Loss from selling", last_buy, "BTC: ", (last_buy * new_price) - (last_buy * buy_p))
-            trade_active = False
-            sells += 1
-
+            initial_amount = last_buy * buy_p
+            new_amount = last_buy * new_price
+            if (new_amount - initial_amount) >= profit_margin: 
+                balance += last_buy * new_price #IN USD
+                btc_holdings -= last_buy
+                print("Profit margin was reached. Profit in USD: ", (last_buy * new_price) - (last_buy * buy_p))
+                trade_active = False
+                sells += 1 
+            else: 
+                buy_info.append(last_buy) 
+                buy_price.append(buy_p)
+            pass
+        
         # Calculate the current portfolio value
         portfolio_value = balance + (btc_holdings * new_price)
         portfolio_values.append(portfolio_value)
-        print(current_in_uptrend, "New Price: ", new_price, "DEMA: ", current_dema, "USD BALANCE: ", balance, "BTC BALANCE: ", btc_holdings * new_price)
-        print("Buys: ", buys, "Sells: ", sells)
+        print("UPTREND: ", current_in_uptrend, "BTC New Price: ", new_price, "DEMA: ", current_dema)
+        print("USD BALANCE: ", balance, "BTC BALANCE: ", btc_holdings * new_price)
+        print("Buys: ", buys, "Sells: ", sells, "Iterations: ", count)
+        
 
         # Wait for the next iteration
         time.sleep(wait_time)
