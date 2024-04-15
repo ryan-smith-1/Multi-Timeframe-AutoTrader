@@ -11,6 +11,9 @@ import talib
 
 
 
+
+
+
 pd.set_option('display.max_rows', None)
 
 API_KEY = None
@@ -57,6 +60,7 @@ def supertrend(data, period, multiplier):
     data['upper_band'] = ((data['high'] + data['low'])/2) + (multiplier * data['atr'].iloc[-1])
     data['lower_band'] = ((data['high'] + data['low'])/2) - (multiplier * data['atr'].iloc[-1])
     data['in_uptrend'] = True
+
     for current in range(1, len(data)):
         prev = current - 1
         if data['close'][current] > data['upper_band'][prev]:
@@ -120,30 +124,29 @@ def calculate_dema(closing_prices):
 
     # Calculate DEMA
     dema = talib.DEMA(df['Close'], timeperiod=200)
-
+    print(closing_prices)
     return dema.iloc[-1]
 
-
-
-def track_min_data(): 
+def new_dema(closing_prices): 
     coinbase_API_key = None
     coinbase_API_secret = None
     client = Client(coinbase_API_key, coinbase_API_secret)
-    currency_code = 'BTC-USD'
-    clocker = 0
+    currency_code = "BTC-USD"
     current_price = client.get_spot_price(currency=currency_code)
-    prices = []
-    while clocker < 61: 
-        new_price = client.get_spot_price(currency=currency_code)
-        new_price = float(new_price.amount)
-        prices.append(new_price)
-        clocker += 1 
-        time.sleep(1)
-    open = prices[0] 
-    close = prices[-1] 
-    high = max(prices) 
-    low = min(prices)
-    return open, close, high, low
+    new_price = float(current_price.amount)
+    length = len(closing_prices)
+    multiplier = (2/(length + 1))
+    #ema_one = SUM(prices) / length
+    count = 0
+    ema_one = 0 
+    while count < len(closing_prices): 
+        for vals in closing_prices: 
+            ema_prev = None
+        ema_one = ema_one/length
+        other_ema = (new_price * multiplier) + (ema_one * (1 - multiplier))
+    pass
+
+
 
 def fetch_btc_data():
     # Initialize variables
@@ -196,15 +199,15 @@ def backtest(df, initial_balance):
     portfolio_values = []
     buy_price = []
     trade_active = False  # Track if a trade is active
-    coinbase_API_key = None
-    coinbase_API_secret = None
+    coinbase_API_key =None
+    coinbase_API_secret =None
     client = Client(coinbase_API_key, coinbase_API_secret)
     sells = 0
     buys = 0
     currency_code = "BTC-USD"
     live_table = pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close'])
     current_timestamp = pd.Timestamp.now()
-
+    stop_loss = False
     # Collect 15 minutes of supertrend data
 
 
@@ -228,13 +231,24 @@ def backtest(df, initial_balance):
 
 
 
-        
+        #STOP LOSS CONDITION
+        if trade_active == True and buy_price[0]:
+            if new_price <= buy_price[0]: 
+                last_buy = buy_info.pop()
+                balance += last_buy * new_price
+                btc_holdings -= last_buy
+                buy_p = buy_price.pop()
+                print("Profit/Loss from selling due to stop loss", last_buy, "BTC: ", (last_buy * new_price) - (last_buy * buy_p))
+                trade_active = False
+                sells += 1 
+                stop_loss = True
+            pass
 
 
         close_prices = calculate_current_dema() 
         current_dema = float(calculate_dema(close_prices))
         # Trading logic (unchanged)
-        if current_in_uptrend and new_price > current_dema and balance > 0:
+        if current_in_uptrend and new_price > current_dema and balance > 0 and stop_loss == False:
         # Buy entire usd balance worth of btc at market
         # Set stop loss condition for current price
             buy_amount = balance
@@ -247,6 +261,7 @@ def backtest(df, initial_balance):
             print("BOUGHT")
             buys += 1
         elif not current_in_uptrend and trade_active:
+
         # Sell entire btc balance at market
             last_buy = buy_info.pop()
             balance += last_buy * new_price
@@ -255,18 +270,6 @@ def backtest(df, initial_balance):
             print("Profit/Loss from selling", last_buy, "BTC: ", (last_buy * new_price) - (last_buy * buy_p))
             trade_active = False
             sells += 1
-        #STOP LOSS CONDITION
-        if trade_active == True and buy_price[0]:
-            if new_price <= buy_price[0]: 
-                last_buy = buy_info.pop()
-                balance += last_buy * new_price
-                btc_holdings -= last_buy
-                buy_p = buy_price.pop()
-                print("Profit/Loss from selling due to stop loss", last_buy, "BTC: ", (last_buy * new_price) - (last_buy * buy_p))
-                trade_active = False
-                sells += 1 
-            pass
-
 
         #TAKE PROFIT CONDITION
         profit_margin = 30
@@ -281,11 +284,10 @@ def backtest(df, initial_balance):
                 print("Profit margin was reached. Profit in USD: ", (last_buy * new_price) - (last_buy * buy_p))
                 trade_active = False
                 sells += 1 
-            else: 
-                buy_info.append(last_buy) 
-                buy_price.append(buy_p)
+            buy_info.append(last_buy) 
+            buy_price.append(buy_p)  
             pass
-        
+
         # Calculate the current portfolio value
         portfolio_value = balance + (btc_holdings * new_price)
         portfolio_values.append(portfolio_value)
@@ -293,7 +295,7 @@ def backtest(df, initial_balance):
         print("USD BALANCE: ", balance, "BTC BALANCE: ", btc_holdings * new_price)
         print("Buys: ", buys, "Sells: ", sells, "Iterations: ", count)
         
-
+        stop_loss = False
         # Wait for the next iteration
         time.sleep(wait_time)
 
