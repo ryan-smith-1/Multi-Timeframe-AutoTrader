@@ -1,16 +1,6 @@
-DEMA + SUPERTREND Strategy BTC bot. Built for coinbase but could work with more. 
-Current supertrend settings are period of 12 and multiplier of 3
+The backtest file must be run with hourly data and it must be in the proper format as defined in the start of the file. 
 
-Working Version: working-version.py is the most up to date version of the bot, but could include logic bugs in trading strategy/calculations
-
-
-Before Running/Installation - 
-Set Coinbase REST API keys (The non pro/advanced one), in all three spots. 
-pip install all required libraries. 
-
-
-
-IMPROVEMENTS TO BE MADE - 
-  1. Create a way to properly backtest the exact strategy being used
- 
-  3. Adding some sort of RSI index to the buy and sell conditions. 
+In order to run the full trading strategy live: 
+1. You must have Robinhood Crypto API keys and input them in the proper spots at the top
+2. Install all of the required libraries
+3. For best results it must be run once and left to run contiuously for extending periods of time. The first time it is run, attempt to run it at 4:00am EST
