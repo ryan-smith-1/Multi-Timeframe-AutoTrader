@@ -31,7 +31,7 @@ exchange = ccxt.coinbasepro({
 
 # Fetch daily BTC/USDT data for the past 200 days
 # Load historical BTC OHLC data from CSV file
-df = pd.read_csv('/Users/theryan/Desktop/Trader/BTCUSDFULLRUN.csv')
+df = pd.read_csv('file path')
 df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
 df = df[['timestamp', 'open', 'high', 'low', 'close', 'volume']]
 
