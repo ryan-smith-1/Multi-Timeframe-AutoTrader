@@ -1,4 +1,5 @@
 import pandas as pd
+#from datetime import datetime, timedelta
 import time
 import talib
 import requests
@@ -11,8 +12,7 @@ from cryptography.hazmat.primitives.asymmetric import ed25519
 import math
 import datetime
 
-#THE MODEL IS BEST WHEN RUN ABOUT 15-30 mins AFTER MIDNIGHT IN GMT TIMEZONE (4AM EST?) ~ => 4:30AM EST including the 15-30 min delay
-
+#THE MODEL MUST BE RUN ABOUT 15-30 mins to 1-2 hours AFTER MIDNIGHT GMT (8:00PM EST) ~ => 8:15PM-10:00PM EST
 
 
 API_KEY = None
@@ -225,6 +225,15 @@ def calculate_dema(closing_prices, spread, trade_active):
     dema = talib.DEMA(new_df['close'], timeperiod=6)
     return dema.iloc[-1]
 
+def wait_for_order_execution(order_id, max_wait_time=120):
+    start_time = time.time()
+    while time.time() - start_time < max_wait_time:
+        order_status = api_trading_client.get_order(order_id)
+        if order_status['state'] == 'filled':  # Adjust based on actual API response
+            return True
+        time.sleep(5)  # Wait for 1 second before checking again
+    return False
+
 def make_money():
     days_running = 0
     take_profit_pct = 0.003  # 0.3% take profit percentage
@@ -259,15 +268,22 @@ def make_money():
                     if not account or 'buying_power' not in account:
                         raise Exception("Failed to get account information")
 
-                    usd_buying_power = float(account['buying_power']) - 1
+                    usd_buying_power = float(account['buying_power'])
+                    
+                    # Calculate 1% of the portfolio value
+                    usd_to_subtract = usd_buying_power * 0.01
+                    
+                    # Subtract 1% from the buying power
+                    usd_buying_power -= usd_to_subtract
                     
                     buy_price = float(current_price_info['ask_inclusive_of_buy_spread'])
-
+                    
                     roundto = 5
                     shifted = (usd_buying_power/buy_price) * (10 ** roundto) 
                     amount_of_btc2 = math.floor(shifted)
                     amount_of_btc2 = amount_of_btc2 / (10 ** roundto)
-                    print(amount_of_btc2)
+
+                    
                     # Place market buy order
                     market_order_config= {
                         "asset_quantity": amount_of_btc2
@@ -278,16 +294,17 @@ def make_money():
                     
 
                     if order_response and 'id' in order_response:
-                        trade_active = True
-                        buy_timestamp = datetime.datetime.now()
-                        print(f"\n--- BUY ORDER EXECUTED ---")
-                        print(f"Time: {buy_timestamp}")
-                        print(f"Amount: {amount_of_btc2} BTC")
-                        print(f"Price: ${buy_price}")
-                        print(f"Total Cost: ${amount_of_btc2 * buy_price}")
-                        print(f"Spread: {spread}")
-                        print(f"Order ID: {order_response['id']}")
-                        print("----------------------------\n")
+                        if wait_for_order_execution(api_trading_client, order_response['id']):
+                            trade_active = True
+                            buy_timestamp = datetime.datetime.now()
+                            print(f"\n--- BUY ORDER EXECUTED ---")
+                            print(f"Time: {buy_timestamp}")
+                            print(f"Amount: {amount_of_btc2} BTC")
+                            print(f"Price: ${buy_price}")
+                            print(f"Total Cost: ${amount_of_btc2 * buy_price}")
+                            print(f"Spread: {spread}")
+                            print(f"Order ID: {order_response['id']}")
+                            print("----------------------------\n")
                     else:
                         raise Exception("Buy order failed")
                 else:
@@ -323,7 +340,7 @@ def make_money():
                         # Sell signal confirmed
                         holdings = api_trading_client.get_holdings('BTC')
                         if holdings and 'results' in holdings and holdings['results']:
-                            btc_to_sell = float(holdings['results'][0]['quantity'])
+                            btc_to_sell = float(holdings['results'][0]['quantity_available_for_trading'])
                             
                             # Calculate the USD value to subtract (1 USD)
                             usd_to_subtract = 1
@@ -343,26 +360,25 @@ def make_money():
                             order_response = api_trading_client.place_order(order_id, "sell", "market", 'BTC-USD', market_order_config)
                             
                             if order_response and 'id' in order_response:
-                                sell_price = float(current_price_info['bid_inclusive_of_sell_spread'])
-                                sell_timestamp = datetime.datetime.now()
-                                profit = (sell_price - buy_price) * btc_to_sell
-                                profit_percentage = (sell_price - buy_price) / buy_price * 100
-
-                                print(f"\n--- SELL ORDER EXECUTED ---")
-                                print(f"Time: {sell_timestamp}")
-                                print(f"Amount: {btc_to_sell} BTC")
-                                print(f"Price: ${sell_price}")
-                                print(f"Total Revenue: ${btc_to_sell * sell_price}")
-                                print(f"Profit: ${profit}")
-                                print(f"Profit Percentage: {profit_percentage:.2f}%")
-                                print(f"Spread: {spread}")
-                                print(f"Order ID: {order_response['id']}")
-                                print(f"Time held: {sell_timestamp - buy_timestamp}")
-                                print("-----------------------------\n")
-
-                                trade_active = False
-                                buy_timestamp = None
-                                buy_price = None
+                                if wait_for_order_execution(order_response['id']):
+                                    sell_price = float(current_price_info['bid_inclusive_of_sell_spread'])
+                                    sell_timestamp = datetime.datetime.now()
+                                    profit = (sell_price - buy_price) * btc_to_sell
+                                    profit_percentage = (sell_price - buy_price) / buy_price * 100
+                                    print(f"\n--- SELL ORDER EXECUTED ---")
+                                    print(f"Time: {sell_timestamp}")
+                                    print(f"Amount: {btc_to_sell} BTC")
+                                    print(f"Price: ${sell_price}")
+                                    print(f"Total Revenue: ${btc_to_sell * sell_price}")
+                                    print(f"Profit: ${profit}")
+                                    print(f"Profit Percentage: {profit_percentage:.2f}%")
+                                    print(f"Spread: {spread}")
+                                    print(f"Order ID: {order_response['id']}")
+                                    print(f"Time held: {sell_timestamp - buy_timestamp}")
+                                    print("-----------------------------\n")
+                                    trade_active = False
+                                    buy_timestamp = None
+                                    buy_price = None
                             else:
                                 raise Exception("Sell order failed")
                     else:
@@ -379,7 +395,7 @@ def make_money():
                     if (current_price - buy_price) / buy_price >= take_profit_pct:
                         holdings = api_trading_client.get_holdings('BTC')
                         if holdings and 'results' in holdings and holdings['results']:
-                            btc_to_sell = float(holdings['results'][0]['quantity'])
+                            btc_to_sell = float(holdings['results'][0]['quantity_available_for_trading'])
                             btc_to_sell = math.floor(btc_to_sell * 1e5) / 1e5  # Round down to 5 decimal places
                             
                             # Place market sell order for take profit
@@ -388,25 +404,24 @@ def make_money():
                             order_response = api_trading_client.place_order(order_id, "sell", "market", 'BTC-USD', order_config)
                             
                             if order_response and 'id' in order_response:
-                                sell_timestamp = datetime.datetime.now()
-                                profit = (current_price - buy_price) * btc_to_sell
-                                profit_percentage = (current_price - buy_price) / buy_price * 100
-
-                                print(f"\n--- TAKE PROFIT SELL EXECUTED ---")
-                                print(f"Time: {sell_timestamp}")
-                                print(f"Amount: {btc_to_sell} BTC")
-                                print(f"Price: ${current_price}")
-                                print(f"Total Revenue: ${btc_to_sell * current_price}")
-                                print(f"Profit: ${profit}")
-                                print(f"Profit Percentage: {profit_percentage:.2f}%")
-                                print(f"Spread: {spread}")
-                                print(f"Order ID: {order_response['id']}")
-                                print(f"Time held: {sell_timestamp - buy_timestamp}")
-                                print("-----------------------------------\n")
-
-                                trade_active = False
-                                buy_timestamp = None
-                                buy_price = None
+                                if wait_for_order_execution(api_trading_client, order_response['id']):
+                                    sell_timestamp = datetime.datetime.now()
+                                    profit = (current_price - buy_price) * btc_to_sell
+                                    profit_percentage = (current_price - buy_price) / buy_price * 100
+                                    print(f"\n--- TAKE PROFIT SELL EXECUTED ---")
+                                    print(f"Time: {sell_timestamp}")
+                                    print(f"Amount: {btc_to_sell} BTC")
+                                    print(f"Price: ${current_price}")
+                                    print(f"Total Revenue: ${btc_to_sell * current_price}")
+                                    print(f"Profit: ${profit}")
+                                    print(f"Profit Percentage: {profit_percentage:.2f}%")
+                                    print(f"Spread: {spread}")
+                                    print(f"Order ID: {order_response['id']}")
+                                    print(f"Time held: {sell_timestamp - buy_timestamp}")
+                                    print("-----------------------------------\n")
+                                    trade_active = False
+                                    buy_timestamp = None
+                                    buy_price = None
                             else:
                                 raise Exception("Take profit sell order failed")
                     else:
