@@ -15,9 +15,9 @@ import datetime
 #THE MODEL MUST BE RUN ABOUT 15-30 mins to 1-2 hours AFTER MIDNIGHT GMT (8:00PM EST) ~ => 8:15PM-10:00PM EST
 
 
+
 API_KEY = None
 BASE64_PRIVATE_KEY = None
-
 
 
 class CryptoAPITrading:
@@ -54,6 +54,7 @@ class CryptoAPITrading:
                 response = requests.get(url, headers=headers, timeout=10)
             elif method == "POST":
                 response = requests.post(url, headers=headers, json=json.loads(body), timeout=10)
+            response.raise_for_status()  # Raise an exception for bad status codes
             return response.json()
         except requests.RequestException as e:
             print(f"Error making API request: {e}")
@@ -225,13 +226,20 @@ def calculate_dema(closing_prices, spread, trade_active):
     dema = talib.DEMA(new_df['close'], timeperiod=6)
     return dema.iloc[-1]
 
-def wait_for_order_execution(order_id, max_wait_time=120):
+def wait_for_order_execution(api_client, order_id, max_wait_time=120):
     start_time = time.time()
-    while time.time() - start_time < max_wait_time:
-        order_status = api_trading_client.get_order(order_id)
-        if order_status['state'] == 'filled':  # Adjust based on actual API response
-            return True
-        time.sleep(5)  # Wait for 1 second before checking again
+    while time.time() - start_time < float(120):
+        order_status = api_client.get_order(order_id)
+        if order_status and 'state' in order_status:
+            if order_status['state'] == 'filled':
+                return True
+            elif order_status['state'] in ['canceled', 'failed']:
+                print(f"Order {order_id} {order_status['state']}")
+                return False
+        else:
+            print(f"Failed to get order status for {order_id}")
+        time.sleep(5)  # Wait for 5 seconds before checking again
+    print(f"Order {order_id} not filled within {max_wait_time} seconds")
     return False
 
 def make_money():
@@ -463,6 +471,7 @@ def start_trading():
 
 if __name__ == "__main__":
     start_trading()
+
 
 
 
