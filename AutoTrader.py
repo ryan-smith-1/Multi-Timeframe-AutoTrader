@@ -20,6 +20,7 @@ API_KEY = None
 BASE64_PRIVATE_KEY = None
 
 
+
 class CryptoAPITrading:
     def __init__(self):
         self.api_key = API_KEY
@@ -368,7 +369,7 @@ def make_money():
                             order_response = api_trading_client.place_order(order_id, "sell", "market", 'BTC-USD', market_order_config)
                             
                             if order_response and 'id' in order_response:
-                                if wait_for_order_execution(order_response['id']):
+                                if wait_for_order_execution(api_trading_client, order_response['id']):
                                     sell_price = float(current_price_info['bid_inclusive_of_sell_spread'])
                                     sell_timestamp = datetime.datetime.now()
                                     profit = (sell_price - buy_price) * btc_to_sell
